@@ -1,0 +1,596 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>СтройМастер — Строим будущее</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+      background: #1F2937;
+      margin: 0;
+      color: #F3F4F6;
+    }
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+      transition: all 0.8s ease-out;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .section {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-position: center;
+      background-size: cover;
+      background-attachment: fixed;
+      background-color: #1F2937;
+      will-change: background-position;
+    }
+    .section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(31, 41, 55, 0.7), rgba(31, 41, 55, 0.9));
+      z-index: 0;
+    }
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      background: rgba(31, 41, 55, 0.8);
+      backdrop-filter: blur(10px);
+      padding: 1rem 0;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 1.5rem;
+      border-radius: 1rem;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .card:hover {
+      transform: translateY(-5px) rotate(1deg);
+      box-shadow: 0 12px 24px rgba(59, 130, 246, 0.3);
+    }
+    .quiz-container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .progress-bar {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .progress {
+      height: 100%;
+      background: linear-gradient(to right, #3B82F6, #8B5CF6);
+      width: 0;
+      transition: width 0.4s ease;
+    }
+    .quiz-question {
+      display: none;
+    }
+    .quiz-question.active {
+      display: block;
+    }
+    .quiz-option {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .quiz-option:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+    }
+    #house-svg {
+      max-width: 500px;
+      height: auto;
+    }
+    #foundation, #walls, #roof, #windows, #finish {
+      opacity: 0;
+    }
+    @media (max-width: 768px) {
+      .section {
+        min-height: 80vh;
+        background-attachment: scroll;
+      }
+      .card:hover {
+        transform: none;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      }
+      #house-svg {
+        max-width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 1. Header -->
+  <header>
+    <nav class="container flex justify-between items-center">
+      <svg class="logo w-36" viewBox="0 0 180 40" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="10" width="10" height="20" fill="url(#grad)"/>
+        <rect x="22" y="15" width="8" height="15" fill="url(#grad)"/>
+        <rect x="32" y="12" width="10" height="18" fill="url(#grad)"/>
+        <text x="50" y="30" font-family="Inter, sans-serif" font-size="18" font-weight="800" fill="#F3F4F6">СтройМастер</text>
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#3B82F6" />
+            <stop offset="100%" style="stop-color:#8B5CF6" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <ul class="flex space-x-6 text-sm font-semibold">
+        <li><a href="#home" class="hover:text-blue-400 transition">Главная</a></li>
+        <li><a href="#services" class="hover:text-blue-400 transition">Услуги</a></li>
+        <li><a href="#projects" class="hover:text-blue-400 transition">Проекты</a></li>
+        <li><a href="#contact" class="hover:text-blue-400 transition">Контакты</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- 2. Hero Section -->
+  <section id="home" class="section" style="background-image: url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1600')">
+    <div class="container text-center p-8 fade-in">
+      <h1 class="text-6xl font-extrabold mb-4 leading-tight">Строим будущее с надежностью</h1>
+      <p class="text-xl mb-6 leading-relaxed">Инновационные строительные решения для вашего дома и бизнеса.</p>
+      <a href="#contact" class="inline-block bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full hover:scale-105 transition-transform">Связаться</a>
+    </div>
+  </section>
+
+  <!-- 3. About Section -->
+  <section id="about" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1600')">
+    <div class="container text-center fade-in">
+      <h2 class="text-5xl font-bold mb-8">О нас</h2>
+      <p class="text-lg max-w-3xl mx-auto leading-relaxed">Компания "СтройМастер" более 15 лет создает жилые и коммерческие объекты. Мы используем передовые технологии и обеспечиваем качество на каждом этапе, от частных домов до промышленных комплексов.</p>
+      <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?q=80&w=800" alt="Команда" class="mt-8 mx-auto rounded-xl shadow-2xl" loading="lazy" onerror="this.src='https://via.placeholder.com/800x400?text=Team+Image+Failed'" width="800" height="400">
+    </div>
+  </section>
+
+  <!-- 4. Services Section -->
+  <section id="services" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Наши услуги</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=400" alt="Жилое строительство" class="mb-4 rounded-lg" loading="lazy" onerror="this.src='https://via.placeholder.com/400x300?text=Residential+Image+Failed'" width="400" height="300">
+          <h3 class="text-xl font-semibold mb-2">Жилое строительство</h3>
+          <p>Уютные дома и коттеджи по вашим пожеланиям.</p>
+        </article>
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1497366811353-6870744d04b2?q=80&w=400" alt="Коммерческое строительство" class="mb-4 rounded-lg" loading="lazy" onerror="this.src='https://via.placeholder.com/400x300?text=Commercial+Image+Failed'" width="400" height="300">
+          <h3 class="text-xl font-semibold mb-2">Коммерческое строительство</h3>
+          <p>Офисы, торговые центры и промышленные объекты.</p>
+        </article>
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=400" alt="Ремонт и отделка" class="mb-4 rounded-lg" loading="lazy" onerror="this.src='https://via.placeholder.com/400x300?text=Renovation+Image+Failed'" width="400" height="300">
+          <h3 class="text-xl font-semibold mb-2">Ремонт и отделка</h3>
+          <p>Качественный ремонт и отделка помещений.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Projects Section -->
+  <section id="projects" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1497366412948-720279406d37?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Наши проекты</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <article class="card relative">
+          <img src="https://images.unsplash.com/photo-1513584684374-8bab748fbf90?q=80&w=600" alt="Проект 1" class="w-full rounded-lg" loading="lazy" onerror="this.src='https://via.placeholder.com/600x400?text=Project+1+Image+Failed'" width="600" height="400">
+          <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+            <p class="text-lg">Жилой комплекс</p>
+          </div>
+        </article>
+        <article class="card relative">
+          <img src="https://images.unsplash.com/photo-14973662105479-4275897d9e06?q=80&w=600" alt="Проект 2" class="w-full rounded-lg" loading="lazy" onerror="this.src='https://via.placeholder.com/600x400?text=Project+2+Image+Failed'" width="600" height="400">
+          <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+            <p class="text-lg">Бизнес-центр</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Process Section -->
+  <section id="process" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Наш процесс</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <article class="card">
+          <div class="text-4xl font-bold text-blue-500 mb-2">01</div>
+          <h3 class="text-xl font-semibold mb-2">Консультация</h3>
+          <p>Обсуждаем идеи и составляем план.</p>
+        </article>
+        <article class="card">
+          <div class="text-4xl font-bold text-blue-500 mb-2">02</div>
+          <h3 class="text-xl font-semibold mb-2">Проектирование</h3>
+          <p>Создаем детальный проект.</p>
+        </article>
+        <article class="card">
+          <div class="text-4xl font-bold text-blue-500 mb-2">03</div>
+          <h3 class="text-xl font-semibold mb-2">Строительство</h3>
+          <p>Реализуем проект с современными технологиями.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Testimonials Section -->
+  <section id="testimonials" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Отзывы</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <article class="card">
+          <p class="mb-4">"Дом построили в срок! Качество на высоте."</p>
+          <p class="font-semibold">Анна Иванова</p>
+        </article>
+        <article class="card">
+          <p class="mb-4">"Профессиональный подход к строительству офиса."</p>
+          <p class="font-semibold">Игорь Петров</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Team Section -->
+  <section id="team" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Команда</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=300" alt="Инженер" class="mb-4 rounded-full mx-auto" loading="lazy" onerror="this.src='https://via.placeholder.com/300x300?text=Engineer+Image+Failed'" width="300" height="300">
+          <h3 class="text-xl font-semibold">Алексей Смирнов</h3>
+          <p>Главный инженер</p>
+        </article>
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300" alt="Архитектор" class="mb-4 rounded-full mx-auto" loading="lazy" onerror="this.src='https://via.placeholder.com/300x300?text=Architect+Image+Failed'" width="300" height="300">
+          <h3 class="text-xl font-semibold">Марина Козлова</h3>
+          <p>Архитектор</p>
+        </article>
+        <article class="card">
+          <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300" alt="Менеджер" class="mb-4 rounded-full mx-auto" loading="lazy" onerror="this.src='https://via.placeholder.com/300x300?text=Manager+Image+Failed'" width="300" height="300">
+          <h3 class="text-xl font-semibold">Дмитрий Васильев</h3>
+          <p>Менеджер проектов</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. Quiz Section -->
+  <section id="quiz" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Рассчитайте стоимость</h2>
+      <div class="quiz-container card">
+        <div class="progress-bar">
+          <div class="progress" id="quiz-progress"></div>
+        </div>
+        <article class="quiz-question active" data-question="1">
+          <h3 class="text-xl font-semibold mb-4">1. Тип проекта?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Жилой дом">Жилой дом</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Коммерческое здание">Коммерческое здание</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Ремонт/отделка">Ремонт/отделка</button>
+        </article>
+        <article class="quiz-question" data-question="2">
+          <h3 class="text-xl font-semibold mb-4">2. Площадь объекта?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="До 100 м²">До 100 м²</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="100–300 м²">100–300 м²</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Более 300 м²">Более 300 м²</button>
+        </article>
+        <article class="quiz-question" data-question="3">
+          <h3 class="text-xl font-semibold mb-4">3. Материал?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Кирпич">Кирпич</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Бетон">Бетон</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Дерево">Дерево</button>
+        </article>
+        <article class="quiz-question" data-question="4">
+          <h3 class="text-xl font-semibold mb-4">4. Проектирование?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Да, нужен полный проект">Да, нужен полный проект</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Только строительство">Только строительство</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Уже есть проект">Уже есть проект</button>
+        </article>
+        <article class="quiz-question" data-question="5">
+          <h3 class="text-xl font-semibold mb-4">5. Уровень отделки?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Черновая">Черновая</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Чистовая">Чистовая</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Под ключ">Под ключ</button>
+        </article>
+        <article class="quiz-question" data-question="6">
+          <h3 class="text-xl font-semibold mb-4">6. Срок завершения?</h3>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="До 6 месяцев">До 6 месяцев</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="6–12 месяцев">6–12 месяцев</button>
+          <button class="quiz-option bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg w-full mb-2" data-value="Более 12 месяцев">Более 12 месяцев</button>
+        </article>
+        <article class="quiz-result hidden">
+          <h3 class="text-xl font-semibold mb-4">Спасибо за ответы!</h3>
+          <p class="mb-4">Свяжитесь с нами для точного расчета.</p>
+          <a href="#contact" class="inline-block bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full hover:scale-105 transition-transform">Связаться</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. Build Animation Section -->
+  <section id="build-animation" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Как мы строим ваш дом</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <svg id="house-svg" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- Foundation -->
+            <rect id="foundation" x="50" y="150" width="200" height="20" fill="#6B7280"/>
+            <!-- Walls -->
+            <rect id="walls" x="70" y="70" width="160" height="80" fill="#9CA3AF"/>
+            <!-- Roof -->
+            <path id="roof" d="M50 70 L150 20 L250 70" fill="#3B82F6"/>
+            <!-- Windows -->
+            <rect id="windows" x="90" y="90" width="20" height="20" fill="#F3F4F6"/>
+            <rect id="windows" x="190" y="90" width="20" height="20" fill="#F3F4F6"/>
+            <!-- Finish (Details) -->
+            <rect id="finish" x="140" y="120" width="20" height="30" fill="#8B5CF6"/>
+          </svg>
+        </div>
+        <div class="card">
+          <h3 class="text-xl font-semibold mb-4">Этапы строительства</h3>
+          <ul class="list-disc list-inside space-y-2">
+            <li>Фундамент: Надежная основа для вашего дома.</li>
+            <li>Стены: Прочные и энергоэффективные конструкции.</li>
+            <li>Крыша: Защита от любых погодных условий.</li>
+            <li>Окна: Современные решения для света и тепла.</li>
+            <li>Отделка: Финальные штрихи для уюта.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. Contact Section -->
+  <section id="contact" class="section py-20" style="background-image: url('https://images.unsplash.com/photo-14973662105479-4275897d9e06?q=80&w=1600')">
+    <div class="container fade-in">
+      <h2 class="text-5xl font-bold text-center mb-12">Свяжитесь с нами</h2>
+      <form class="max-w-lg mx-auto card">
+        <input type="text" placeholder="Имя" class="w-full p-3 bg-transparent border border-gray-600 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        <input type="email" placeholder="Email" class="w-full p-3 bg-transparent border border-gray-600 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+        <textarea placeholder="Сообщение" class="w-full p-3 bg-transparent border border-gray-600 rounded-lg h-32 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"></textarea>
+        <button class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full hover:scale-105 transition-transform w-full">Отправить</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 12. Footer -->
+  <section id="footer" class="section py-10" style="background-image: url('https://images.unsplash.com/photo-1497366412948-720279406d37?q=80&w=1600')">
+    <footer class="container flex justify-between items-center">
+      <p>© 2025 СтройМастер | +7 (495) 123-45-67 | info@stroymaster.ru</p>
+      <div class="flex space-x-4">
+        <a href="#" class="hover:scale-110 transition-transform">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM15.07 9.25C15.07 9.25 14.71 9.25 14.71 9.25C14.71 9.25 14.71 8.89 14.71 8.89C14.71 8.46 14.35 8.1 13.92 8.1H12.59C12.16 8.1 11.8 8.46 11.8 8.89V10.22C11.8 10.65 12.16 11.01 12.59 11.01H13.92C14.35 11.01 14.71 10.65 14.71 10.22V9.86C14.71 9.43 15.07 9.25 15.07 9.25ZM12 15.5C11.17 15.5 10.5 14.83 10.5 14C10.5 13.17 11.17 12.5 12 12.5C12.83 12.5 13.5 13.17 13.5 14C13.5 14.83 12.83 15.5 12 15.5ZM9.5 11.01C9.07 11.01 8.71 10.65 8.71 10.22V8.89C8.71 8.46 9.07 8.1 9.5 8.1C9.93 8.1 10.29 8.46 10.29 8.89V10.22C10.29 10.65 9.93 11.01 9.5 11.01Z" fill="#F3F4F6"/>
+          </svg>
+        </a>
+        <a href="#" class="hover:scale-110 transition-transform">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 10.9V16H10.5V10.9H12ZM12 8.9C12 9.46 11.55 9.9 11 9.9C10.45 9.9 10 9.46 10 8.9C10 8.34 10.45 7.9 11 7.9C11.55 7.9 12 8.34 12 8.9Z" fill="#F3F4F6"/>
+          </svg>
+        </a>
+      </div>
+    </footer>
+  </section>
+
+  <script>
+    // GSAP Animations
+    if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+      gsap.registerPlugin(ScrollTrigger);
+
+      // Fade-in animations
+      gsap.utils.toArray('.fade-in').forEach(el => {
+        gsap.fromTo(el, { opacity: 0, y: 30 }, {
+          opacity: 1,
+          y: 0,
+          duration: 0.8,
+          scrollTrigger: {
+            trigger: el,
+            start: 'top 85%',
+            end: 'bottom 15%',
+            toggleActions: 'play none none reverse'
+          }
+        });
+      });
+
+      // Card animations
+      gsap.utils.toArray('.card').forEach(card => {
+        gsap.from(card, {
+          scale: 0.95,
+          opacity: 0,
+          duration: 0.5,
+          scrollTrigger: {
+            trigger: card,
+            start: 'top 90%',
+            end: 'bottom 10%'
+          }
+        });
+      });
+
+      // Button hover animations
+      gsap.utils.toArray('button, a').forEach(btn => {
+        btn.addEventListener('mouseenter', () => gsap.to(btn, { scale: 1.05, duration: 0.2 }));
+        btn.addEventListener('mouseleave', () => gsap.to(btn, { scale: 1, duration: 0.2 }));
+      });
+
+      // House build animation
+      gsap.from('#foundation', {
+        opacity: 0,
+        y: 50,
+        duration: 1,
+        scrollTrigger: {
+          trigger: '#build-animation',
+          start: 'top 80%',
+          end: 'top 60%',
+          scrub: true
+        }
+      });
+      gsap.from('#walls', {
+        opacity: 0,
+        y: 50,
+        duration: 1,
+        scrollTrigger: {
+          trigger: '#build-animation',
+          start: 'top 70%',
+          end: 'top 50%',
+          scrub: true
+        }
+      });
+      gsap.from('#roof', {
+        opacity: 0,
+        y: -50,
+        duration: 1,
+        scrollTrigger: {
+          trigger: '#build-animation',
+          start: 'top 60%',
+          end: 'top 40%',
+          scrub: true
+        }
+      });
+      gsap.from('#windows', {
+        opacity: 0,
+        scale: 0.5,
+        duration: 1,
+        scrollTrigger: {
+          trigger: '#build-animation',
+          start: 'top 50%',
+          end: 'top 30%',
+          scrub: true
+        }
+      });
+      gsap.from('#finish', {
+        opacity: 0,
+        scale: 0.5,
+        duration: 1,
+        scrollTrigger: {
+          trigger: '#build-animation',
+          start: 'top 40%',
+          end: 'top 20%',
+          scrub: true
+        }
+      });
+    } else {
+      console.warn('GSAP or ScrollTrigger not loaded.');
+    }
+
+    // Smooth Scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', e => {
+        e.preventDefault();
+        document.querySelector(anchor.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    // Image Fallback
+    window.addEventListener('load', () => {
+      document.querySelectorAll('img').forEach(img => {
+        if (!img.complete || img.naturalWidth === 0) {
+          img.src = img.getAttribute('onerror').match(/'([^']+)'/)[1];
+        }
+      });
+    });
+
+    // Quiz Logic
+    const quizQuestions = document.querySelectorAll('.quiz-question');
+    const quizResult = document.querySelector('.quiz-result');
+    const progressBar = document.querySelector('#quiz-progress');
+    let currentQuestion = 1;
+    const totalQuestions = 6;
+
+    function updateProgress() {
+      progressBar.style.width = `${(currentQuestion / totalQuestions) * 100}%`;
+    }
+
+    function showQuestion(num) {
+      quizQuestions.forEach(q => q.classList.remove('active'));
+      quizResult.classList.add('hidden');
+      if (num <= totalQuestions) {
+        quizQuestions[num - 1].classList.add('active');
+        gsap.from(quizQuestions[num - 1], { opacity: 0, x: 20, duration: 0.5 });
+      } else {
+        quizResult.classList.remove('hidden');
+        gsap.from(quizResult, { opacity: 0, y: 20, duration: 0.5 });
+      }
+      updateProgress();
+    }
+
+    document.querySelectorAll('.quiz-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentQuestion++;
+        showQuestion(currentQuestion);
+      });
+    });
+
+    updateProgress();
+  </script>
+</body>
+</html>
